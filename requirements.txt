@@ -2,3 +2,7 @@ ipykernel
 langchain
 pypdf
 rapidocr_onnxruntime
+boto3
+langchain-community
+faiss-cpu
+streamlit
