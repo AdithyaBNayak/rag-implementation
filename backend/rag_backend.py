@@ -1,4 +1,5 @@
 import os
+import configparser
 from langchain_community.document_loaders import PyPDFLoader
 from langchain.embeddings.bedrock import BedrockEmbeddings
 from langchain.text_splitter import RecursiveCharacterTextSplitter
@@ -6,11 +7,52 @@ from langchain_community.vectorstores import FAISS
 from langchain.indexes.vectorstore import VectorstoreIndexCreator, VectorStoreIndexWrapper
 from langchain.llms.bedrock import Bedrock
 
-
-def get_document_index():
+def get_dynamic_params():
+    config = configparser.ConfigParser()
     # Construct the path to the PDF file dynamically
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    pdf_file_path = os.path.join(current_dir, '..', 'pdf_datas', 'IIFL Wealth Hurun India Rich List 2022- Media Release.pdf')
+    parameters_file_path = os.path.join(current_dir, '..', 'parameters.ini')
+    config.read(parameters_file_path)
+    
+    vector_index_params = config['VectorIndexParams']
+
+    params = {}
+    params['file_name'] = vector_index_params.get('file_name', '')
+    params['text_splitter'] = {
+        'chunk_size': int(vector_index_params.get('chunk_size', '100')),
+        'chunk_overlap': int(vector_index_params.get('chunk_overlap', '10'))
+    }
+    params['aws_cred_profile'] = vector_index_params.get('aws_cred_profile', 'default')
+    params['embedding_model_id'] = vector_index_params.get('embedding_model_id', 'amazon.titan-embed-text-v1')
+
+    return params
+    
+def get_llm_parameters():
+    config = configparser.ConfigParser()
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    parameters_file_path = os.path.join(current_dir, '..', 'parameters.ini')
+    config.read(parameters_file_path)
+    
+    llm_parameters = config['LLMParameters']
+
+    params = {}
+    params['cred_profile'] = llm_parameters.get('cred_profile')
+    params['model_id'] = llm_parameters.get('model_id')
+    params['model_params'] = {
+        'max_gen_len': int(llm_parameters.get('max_gen_len')),
+        'temperature': float(llm_parameters.get('temperature')),
+        'top_p': float(llm_parameters.get('top_p'))
+    }
+
+    return params
+
+def get_document_index():
+    # Get Dynamic Parameters
+    params = get_dynamic_params()       
+    
+    # Construct the path to the PDF file dynamically
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    pdf_file_path = os.path.join(current_dir, '..', 'pdf_datas', params["file_name"])
 
     # Loading the pdf data in PyPDFLoader Object
     pdf_loader_data = PyPDFLoader(pdf_file_path)
@@ -18,14 +60,14 @@ def get_document_index():
     # Creating Text Splitter
     text_splitter = RecursiveCharacterTextSplitter(
         separators=["\n\n", "\n", " ", "" ],
-        chunk_size = 100,
-        chunk_overlap = 10
+        chunk_size = params["text_splitter"]["chunk_size"],
+        chunk_overlap = params["text_splitter"]["chunk_overlap"]
     )
 
     # Instantiating BedrockEmbedding
     bedrock_embedding = BedrockEmbeddings(
-        credentials_profile_name="default",
-        model_id="amazon.titan-embed-text-v1"
+        credentials_profile_name=params["aws_cred_profile"],
+        model_id=params["embedding_model_id"]
     )
 
     # Splitting the Db, Creating VectorDB, Creting Embeddings and Storing it using VectorStoreIndexCreator
@@ -39,18 +81,14 @@ def get_document_index():
     return db_index
 
 def fm_llm():
+    params = get_llm_parameters()
+       
     # Create an LLM for Bedrock Model
     return Bedrock(
-        credentials_profile_name='default',
-        model_id='meta.llama2-13b-chat-v1',
-        model_kwargs={
-            # "max_tokens_to_sample": 300,
-            # "temperature": 0.1,
-            # "top_p": 0.9,
-            "max_gen_len": 512,
-            "temperature": 0.1,
-            "top_p": 0.9
-        })
+        credentials_profile_name=params["cred_profile"],
+        model_id=params["model_id"],
+        model_kwargs=params["model_params"]
+        )
     
 def doc_rag_response(index: VectorStoreIndexWrapper, prompt):
     # Query from the index
