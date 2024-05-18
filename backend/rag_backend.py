@@ -24,6 +24,7 @@ def get_dynamic_params():
     }
     params['aws_cred_profile'] = vector_index_params.get('aws_cred_profile', 'default')
     params['embedding_model_id'] = vector_index_params.get('embedding_model_id', 'amazon.titan-embed-text-v1')
+    params['folder'] = vector_index_params.get("folder_name")
 
     return params
     
@@ -46,16 +47,32 @@ def get_llm_parameters():
 
     return params
 
+def load_pdfs_from_folder(folder_path):
+    print(f"Reading the pdfs in the location {folder_path}")
+    data_loaded_ist = []
+    
+    for filename in os.listdir(folder_path):     
+        if filename.endswith('.pdf'):
+            print(f"Reading data for {filename}")
+            # Construct the full file path
+            pdf_path = os.path.join(folder_path, filename)
+            # Loading the pdf data in PyPDFLoader Object
+            pdf_loader_data = PyPDFLoader(pdf_path)
+            data_loaded_ist.append(pdf_loader_data)
+                   
+    return data_loaded_ist
+    
+
 def get_document_index():
     # Get Dynamic Parameters
-    params = get_dynamic_params()       
+    params = get_dynamic_params()
     
-    # Construct the path to the PDF file dynamically
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    pdf_file_path = os.path.join(current_dir, '..', 'pdf_datas', params["file_name"])
-
     # Loading the pdf data in PyPDFLoader Object
-    pdf_loader_data = PyPDFLoader(pdf_file_path)
+    # Construct the path to the PDF file dynamically
+    current_dir = os.path.dirname(os.path.abspath(__file__))   
+    folder_location = os.path.join(current_dir, '..', params["folder"])
+    pdf_loader_data_list = load_pdfs_from_folder(folder_location)
+    print(pdf_loader_data_list)
 
     # Creating Text Splitter
     text_splitter = RecursiveCharacterTextSplitter(
@@ -77,7 +94,7 @@ def get_document_index():
         embedding=bedrock_embedding
     )
 
-    db_index = index_creator.from_loaders([pdf_loader_data])
+    db_index = index_creator.from_loaders(pdf_loader_data_list)
     return db_index
 
 def fm_llm():
